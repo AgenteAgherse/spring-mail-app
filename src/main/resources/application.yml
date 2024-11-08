@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: CsvToMail
+server:
+  servlet:
+    context-path: /api
+  port:
+    81
+logging:
+  level:
+    root: error
+
+app:
+  params:
+    attribute_identifier: '&&&'
