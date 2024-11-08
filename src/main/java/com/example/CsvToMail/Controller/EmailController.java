@@ -6,6 +6,7 @@ import com.example.CsvToMail.Model.UserEmailDetails;
 import com.example.CsvToMail.Services.MailService;
 import com.example.CsvToMail.Utils.TextLibraries.MessageType;
 import jakarta.mail.MessagingException;
+import org.apache.coyote.Response;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -43,7 +44,9 @@ public class EmailController {
         }
 
 
-        return ResponseEntity.status(200).body(filteredBody.toString());
+        return ResponseEntity
+                .status(200)
+                .body(filteredBody.toString());
     }
     @GetMapping(path = "/mock_email_template")
     public ResponseEntity<Mail> getMailBody() {
@@ -53,12 +56,13 @@ public class EmailController {
         newMail.setDetails(new MailDetails());
         newMail.getHeaders().setEmail("example@email.com");
         newMail.getHeaders().setSecurePassword("api_password");
-        newMail.getHeaders().setMailType(MessageType.TEXT);
+        newMail.getHeaders().setMailType(MessageType.TEXT + "/" + MessageType.HTML);
+        newMail.getHeaders().setMailService(MessageType.GMAIL + "/" + MessageType.OUTLOOK_HOTMAIL + "/" + MessageType.YAHOO);
+        newMail.getHeaders().setEmailColumnIndex(-1);
 
         newMail.getDetails().setSubject("Mock Subject");
         newMail.getDetails().setBody("Body of the mocking mail.");
         String[] sendTo = {"sendTo@gmail.com"};
-        newMail.getDetails().setSendTo(sendTo);
         List<byte[]> images = new ArrayList<>();
         byte[] mockImage = {0,1,0,1,1};
         images.add(mockImage);
@@ -67,7 +71,8 @@ public class EmailController {
 
         return ResponseEntity.status(200).body(newMail);
     }
-    @PutMapping(path = "/send")
+
+    @GetMapping(path = "/send")
     public ResponseEntity<String> sendEmail(@RequestBody Mail information) {
         try {
             mailUtils.sendEmail(information);
@@ -75,11 +80,13 @@ public class EmailController {
             return ResponseEntity
                     .status(400)
                     .body("Error sending the email.");
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Error with some method.");
         }
 
         return ResponseEntity
                 .status(201)
-                .body("Email sent.");
+                .body("Group of emails sent successfully.");
     }
 
 

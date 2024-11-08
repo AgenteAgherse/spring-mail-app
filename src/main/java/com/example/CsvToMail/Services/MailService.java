@@ -2,15 +2,18 @@ package com.example.CsvToMail.Services;
 
 import com.example.CsvToMail.DTO.Mail;
 import com.example.CsvToMail.Model.UserEmailDetails;
+import com.example.CsvToMail.Utils.TextLibraries.CsvUtils;
 import com.example.CsvToMail.Utils.TextLibraries.MessageType;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseEntity;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
+import java.sql.SQLOutput;
 import java.util.Properties;
 
 @Service
@@ -24,9 +27,9 @@ public class MailService {
 
         String host = "";
         switch (filtered) {
-            case "gmail" -> host = "smtp.gmail.com";
-            case "outlook" -> host = "smtp.office365.com";
-            case "yahoo" -> host = "smtp.mail.yahoo.com";
+            case MessageType.GMAIL -> host = "smtp.gmail.com";
+            case MessageType.OUTLOOK_HOTMAIL -> host = "smtp.office365.com";
+            case MessageType.YAHOO -> host = "smtp.mail.yahoo.com";
             default -> host = "Not valid";
         }
         return host;
@@ -36,33 +39,59 @@ public class MailService {
         JavaMailSenderImpl token = new JavaMailSenderImpl();
         token.setUsername(userDetails.getEmail());
         token.setPassword(userDetails.getSecurePassword());
-        token.setHost(getHost(userDetails.getMailType()));
-
-        Properties prop = token.getJavaMailProperties();
-        prop.put("mail.transport.protocol", "smtp");
-        prop.put("mail.smtp.auth", "true");
-        prop.put("mail.smtp.starttls.enable", "true");
-        prop.put("mail.debug", "true");
+        Properties properties = token.getJavaMailProperties();
+        properties.put("mail.smtp.host", getHost(userDetails.getMailService()));
+        properties.put("mail.smtp.port", "587"); // Asegúrate de usar el puerto adecuado
+        properties.put("mail.smtp.auth", "true");
+        properties.put("mail.smtp.starttls.enable", "true");
+        properties.put("mail.smtp.localhost", "localhost"); // Usa un nombre sin caracteres especiales, como "localhost" o "myhostname"
 
         return token;
     }
 
     public void sendEmail(Mail mensaje) throws MessagingException {
-        JavaMailSender headers = createUser(mensaje.getHeaders());
         boolean isHTML =
-                mensaje.getHeaders().getMailType().equalsIgnoreCase(MessageType.HTML) ||
-                !mensaje.getDetails().getImages().isEmpty();
-        MimeMessage message = headers.createMimeMessage();
-        MimeMessageHelper helper = new MimeMessageHelper(message, isHTML);
+                mensaje.getHeaders().getMailType().equalsIgnoreCase(MessageType.HTML);
 
-        // Para la funcionalidad del mensaje por HTML.
+        // Si el correo es en texto
         if (!isHTML) {
-            helper.setText(mensaje.getDetails().getBody());
+            System.out.println("Pasa por mensajes de texto");
+            textMail(mensaje);
         }
+    }
 
-        helper.setTo(mensaje.getDetails().getSendTo());
-        helper.setSubject(mensaje.getDetails().getSubject());
-        headers.send(message);
+    private void textMail(Mail mail) throws MessagingException {
+        // Cuerpo del correo
+        String bodyTemplate = mail.getDetails().getBody();
+        String[][] informationMatrix = mail.getDetails().getDynamicInformation();
+        if (!CsvUtils.validarMatriz(informationMatrix)) return;
+
+        int emailCol = mail.getHeaders().getEmailColumnIndex();
+        int cols = informationMatrix[0].length, rows = informationMatrix.length;
+
+        // Dataset ahora limitado a 1 persona
+        String[][] userInformation = new String[2][cols];
+        userInformation[0] = informationMatrix[0]; // Se asignan los headers
+        // Correos individuales
+        if (!mail.getDetails().isSendToGroup()) {
+            for (int row = 1; row < rows; row++) {
+                JavaMailSender headers = createUser(mail.getHeaders());
+                MimeMessage message = headers.createMimeMessage();
+                MimeMessageHelper helper = new MimeMessageHelper(message);
+
+                userInformation[1] = informationMatrix[row];
+                String newBody = bodyFiltered(userInformation, bodyTemplate); // Se obtiene el cuerpo filtrado
+
+
+                helper.setFrom(mail.getHeaders().getEmail());
+                helper.setTo(userInformation[1][emailCol]);
+                helper.setSubject(mail.getDetails().getSubject());
+                helper.setText(newBody);
+
+                headers.send(message);
+            }
+        }
+        // Casos grupales (Realizar el sábado el requerimiento).
     }
 
     /**
@@ -78,7 +107,6 @@ public class MailService {
         int col = 0;
         for (String header: information[0]) {
             String param = attrSep + header + attrSep;
-            System.out.println(param);
             body = body.replaceAll(param, information[1][col]);
             col++;
         }

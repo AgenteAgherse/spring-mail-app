@@ -46,4 +46,9 @@ public class CsvUtils {
         }
         return information;
     }
+
+
+    public static boolean validarMatriz(Object[][] matriz) {
+        return matriz != null && (matriz.length > 1 || (matriz[0].length < 1));
+    }
 }
